@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:${POSTGRESQL_IMAGE_VERSION:-latest}
+    container_name: tryton_postgres
+    restart: ${POSTGRESQL_RESTART:-always}
+    ports:
+      - "${POSTGRESQL_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRESQL_DB:-tryton}
+      POSTGRES_USER: ${POSTGRESQL_USERNAME:-tryton}
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:-mysecretpassword}
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRESQL_USERNAME:-tryton}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  tryton:
+    image: tryton/tryton:${TRYTON_IMAGE_VERSION:-latest}
+    container_name: tryton_server
+    user: root
+    restart: ${TRYTON_RESTART:-always}
+    ports:
+      - "${TRYTON_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TRYTOND_DATABASE_URI: postgresql://${POSTGRESQL_USERNAME:-tryton}:${POSTGRESQL_PASSWORD:-mysecretpassword}@postgres:${POSTGRESQL_PORT:-5432}/${POSTGRESQL_DB:-tryton}
+    # volumes:
+    #   - tryton_data:/var/lib/trytond
+      # - ./modules:/modules
+    command: >
+      sh -c "
+      apt-get update &&
+      apt-get install cookiecutter mercurial -y &&
+      trytond --dev
+      "
+
+    # apt install cookiecutter
+    
+    # echo '⏳ Waiting DB...' &&
+    # sleep 5 &&
+    # echo '⚙️ Init database (if not exists)...' &&
+    # trytond-admin -d tryton --all &&
+    # echo '🚀 Starting Tryton...' &&
+
+    # printf '\n' | trytond-admin -d tryton --all &&
+
+    # trytond-admin -d tryton --all --email=admin@example.com &&
+
+  tryton-cron:
+    image: tryton/tryton:${TRYTON_IMAGE_VERSION:-latest}
+    container_name: tryton_cron
+    user: root
+    restart: ${TRYTON_RESTART:-always}
+    depends_on:
+      tryton:
+        condition: service_started
+    environment:
+      TRYTOND_DATABASE_URI: postgresql://${POSTGRESQL_USERNAME:-tryton}:${POSTGRESQL_PASSWORD:-mysecretpassword}@postgres:${POSTGRESQL_PORT:-5432}/${POSTGRESQL_DB:-tryton}
+    command: >
+      sh -c "
+      echo '⏳ Waiting server...' &&
+      sleep 10 &&
+      echo '🕒 Starting cron...' &&
+      trytond-cron -d tryton
+      "
+
+# volumes:
+#   postgres_data:
+#   tryton_data:
